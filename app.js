@@ -1,32 +1,76 @@
-const http = require('http');
-const fs = require('fs');
-const port = 5000;
 const express = require('express');
-const app = express();
+const mongoose = require('mongoose');
+const bodyParser = require('body-parser');
+const multer =  require('multer');
+const path = require('path');
 
-app.listen(port,() => {
-    console.log(`Server is running on port ${port}`);
-});
+var picSchema= new mongoose.Schema({
+    picpath:String
+})
 
-app.use(express.static('public'));
+var picModel = mongoose.model('picsdemo',picSchema);
 
-// const server = http.createServer((req,res) => {
-//     res.writeHead(200,{'Content-Type':'text/html'})
-//     fs.readFile('index.html',(err,data) => {
-//         if(err) {
-//             res.writeHead(404);
-//             res.write('Error: File Not Found');
-//         } else {
-//             res.write(data);
-//         }
-//         res.end();
-//     });
-// });
+var storage = multer.diskStorage({
+    destination:function(req,file,cb){
+        cb(null,'./public/uploads')
+    },
+    filename:function(req,file,cb){
+        cb(null,file.originalname)
+    }
+})
+var upload = multer({storage:storage})
 
-// server.listen(port,(err) => {
-//     if(err) {
-//         console.log(err);
-//     } else {
-//         console.log(`Server is running on port ${port}`);
-//     }
-// });
+var app = express();
+
+mongoose.connect('mongodb://localhost:27017/pics',{useNewUrlParser:true})
+.then(()=>console.log('connected')).catch(err=>console.log('error ocured',err));
+
+app.set('views',path.resolve(__dirname,'views'));
+app.set('view engine','ejs');
+
+var pathh = path.resolve(__dirname,'public');
+app.use(express.static(pathh));
+app.use(bodyParser.urlencoded({extended:false}));
+
+
+app.get('/',(req,res)=>{
+    picModel.find((err,data)=>{
+        if(err){
+            console.log(err)
+        }
+        else if(data.length>0){
+            res.render('home',{data:data})
+        }
+        else{
+            res.render('home',{data:{}})
+        }
+    })
+})
+
+app.post('/',upload.single('pic'),(req,res)=>{
+    var x = 'uploads/'+req.file.originalname;
+    var temp = new picModel({
+        picpath:x
+    })
+    temp.save((err,data)=>{
+        if(err){
+            console.log(err)
+        }
+        res.redirect('/')
+    })
+})
+
+app.get('/download/:id',(req,res)=>{
+    picModel.find({_id:req.params.id},(err,data)=>{
+         if(err){
+             console.log(err)
+         }
+         else{
+             var x= __dirname+'/public/'+data[0].picpath;
+             res.download(x)
+         }
+    })
+})
+
+var port  = process.env.PORT || 3000 ;
+app.listen(port,()=>console.log('server running at port'+port))
